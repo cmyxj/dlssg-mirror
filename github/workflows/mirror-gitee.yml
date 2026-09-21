@@ -1,0 +1,35 @@
+name: mirror-gitee
+
+on:
+  # 每 12 小时检查上游是否有新版，有则同步到 Gitee
+  schedule:
+    - cron: '0 */12 * * *'
+  # 手动触发，可指定版本
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '同步指定版本（留空 = 上游最新）'
+        required: false
+        default: ''
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sync to Gitee
+        env:
+          GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            ARGS="--version ${{ github.event.inputs.version }}"
+          fi
+          python .github/scripts/mirror_gitee.py $ARGS
