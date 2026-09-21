@@ -178,10 +178,16 @@ def ensure_release(tag: str) -> dict:
         rel = None
     if isinstance(rel, dict) and rel.get("id"):
         return rel
+    # 创建 release 必须带 target_commitish，否则 Gitee 返回 400
     return _api(
         "POST",
         "/releases",
-        {"tag_name": tag, "name": f"mirror {tag}", "body": "auto mirror (zipped payload)"},
+        {
+            "tag_name": tag,
+            "name": f"mirror {tag}",
+            "body": "auto mirror (zipped payload)",
+            "target_commitish": "main",
+        },
     )
 
 
