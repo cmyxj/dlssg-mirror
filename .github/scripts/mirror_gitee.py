@@ -114,9 +114,10 @@ def download_upstream_archive(repo: str, ver: str, dest: Path) -> None:
     with zipfile.ZipFile(zip_path) as z:
         names = z.namelist()
         for pf in PAYLOAD_FILES:
-            cand = [n for n in names if n == prefix + pf or n.endswith("/" + pf)]
+            # 只取仓库根目录下的 payload，避开 310.1/、archive/ 等子目录里的同名变体
+            cand = [n for n in names if n == prefix + pf]
             if not cand:
-                print(f"  WARN: 上游归档未找到 {pf}，跳过")
+                print(f"  WARN: 上游归档根目录未找到 {pf}，跳过（注意避开 310.1/ 等子目录）")
                 continue
             target = dest / pf
             target.parent.mkdir(parents=True, exist_ok=True)
