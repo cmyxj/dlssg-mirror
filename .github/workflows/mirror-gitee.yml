@@ -1,9 +1,11 @@
 name: mirror-gitee
 
+# 仅手动触发。
+# 说明：all.zip 约 50MB，从 GitHub 的美国 runner 上传到 Gitee 会因上行太慢而 write
+# timeout 失败（实测 53MB 在 900s 内传不完）。因此本 workflow 不设为定时自动跑，
+# 改为在「国内/靠近 Gitee 的网络环境」手动触发（或用本机带代理运行脚本）。
+# 日常镜像：在国内机器执行 `python .github/scripts/mirror_gitee.py` 即可。
 on:
-  # 每 12 小时检查上游是否有新版，有则同步到 Gitee
-  schedule:
-    - cron: '0 */12 * * *'
   # 手动触发，可指定版本
   workflow_dispatch:
     inputs:

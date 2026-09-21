@@ -18,12 +18,21 @@
 用法：
     python mirror_gitee.py                 # 同步上游最新版
     python mirror_gitee.py --version 0.3.5 # 同步指定版本
+
+注意（重要）：
+  - all.zip 约 50MB，上传 Gitee 时如果运行环境到 Gitee 的上行很慢（例如 GitHub
+    Actions 的美国 runner，实测 53MB 上传会在 900s 内 write timeout 失败），请改在
+    **国内/靠近 Gitee 的网络环境**运行本脚本（或本地带代理运行）。脚本已对上传做
+    重试与放大超时，但根本瓶颈是网络，国内环境几秒即可传完。
+  - 可选环境变量：MIRROR_UPLOAD_TIMEOUT（单次上传超时秒数，默认 1800）、
+    MIRROR_FORCE=1（强制重传已存在的 all.zip）。
 """
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+import time
 import json
 import re
 import shutil
@@ -223,8 +232,32 @@ def sync_to_gitee(version: str, workdir: Path) -> None:
         _api("DELETE", f"/releases/{rid}/attach_files/{existing['id']}")
         print(f"  已删除旧 {ASSET_NAME}，准备重传")
 
-    _api("POST", f"/releases/{rid}/attach_files", {}, file=zip_path)
+    upload_timeout = int(os.environ.get("MIRROR_UPLOAD_TIMEOUT", "1800"))
+    _upload_asset_with_retry(rid, zip_path, upload_timeout)
     print(f"  已上传 {ASSET_NAME} -> gitee.com/{os.environ['GITEE_OWNER']}/{os.environ['GITEE_REPO']} release {version}")
+
+
+def _upload_asset_with_retry(rid: int, zip_path: Path, timeout: int) -> None:
+    """上传 all.zip，遇到网络超时/中断自动重试（Gitee 大文件上传在慢网络上易超时）。"""
+    for attempt in range(1, MAX_RETRY + 1):
+        try:
+            _api("POST", f"/releases/{rid}/attach_files", {}, file=zip_path, timeout=timeout)
+            return
+        except (URLError, TimeoutError, OSError) as e:
+            print(f"  [warn] 上传 {ASSET_NAME} 第{attempt}次失败: {e}（重试 {attempt}/{MAX_RETRY}）", file=sys.stderr)
+            if attempt < MAX_RETRY:
+                time.sleep(5)
+                # 重传前确认是否已有残留（避免重复/半截附件）
+                ex = _existing_asset(rid)
+                if ex and os.environ.get("MIRROR_FORCE") != "1":
+                    print(f"  {ASSET_NAME} 已存在，跳过重传")
+                    return
+                if ex:
+                    try:
+                        _api("DELETE", f"/releases/{rid}/attach_files/{ex['id']}")
+                    except Exception:
+                        pass
+    raise RuntimeError(f"上传 {ASSET_NAME} 失败（已重试 {MAX_RETRY} 次）")
 
 
 def main() -> None:
